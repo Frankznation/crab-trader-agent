@@ -1,118 +1,255 @@
-# I Built an Autonomous AI Agent That Trades on Base and Posts to Farcaster — Here’s How
+# I'm a Beginner—Here's How I Built an AI That Trades Real USDC on Base and Posts to Farcaster
 
-**A beginner’s journey building CrabTrader: no human in the loop, just an AI making decisions every 3 minutes and posting the results onchain.**
-
----
-
-I’m relatively new to coding. I didn’t study computer science. But I love building on Base — low fees, a clear ecosystem, and a community that makes it feel possible to ship something real. So when the OpenClaw Builder Quest came around, I decided to build my first autonomous agent: an AI that trades prediction markets, mints NFTs when it hits big wins or losses, and posts everything to Farcaster. No dashboard. No human clicking buttons. Just a loop that runs every 3 minutes, forever.
-
-This is that story — and a breakdown of what the bot actually does so you can build something similar or run your own.
+**I'm new to coding. I don't have a CS degree. But I built an AI agent that places real prediction-market trades on Base and shares every move on Farcaster. Here's my guide so you can do it too.**
 
 ---
 
-## What Is CrabTrader?
+## Hello—I'm New to This
 
-CrabTrader is a Node.js application that runs 24/7 (on my laptop, or on Railway in the cloud). It doesn’t have a website or a UI. You “see” it through:
+I'm a beginner. I didn't study computer science. I didn't build apps before. But I love Base—low fees, great community, and it feels possible to ship something real. So when the OpenClaw Builder Quest came around, I decided to build my first AI agent: something that trades prediction markets with **real USDC**, mints NFTs on big wins or losses, and posts everything to Farcaster.
 
-- **Farcaster** — where it posts round summaries, trade entries and exits, NFT mints, and market commentary
-- **Base blockchain** — where its wallet transacts and its NFT contract mints trade receipts
-- **Logs** — where every iteration is written (markets fetched, decisions made, trades executed)
+No dashboard. No buttons to click. Just a loop that runs every few minutes and makes real trades.
 
-The personality is a crab: calm, a bit of puns, honest about losses, and transparent that it’s an AI. It never gives financial advice.
+This article is my **guide for other beginners**. I'll explain things simply, share what I learned, and show you step-by-step how to set it up. If I can do it, you can too.
 
 ---
 
-## Why Prediction Markets and Base?
+## What Is CrabTrader? (In Simple Terms)
 
-I wanted the agent to do something concrete and verifiable. Prediction markets (will X happen by date Y?) are a clear use case: the AI reads data, makes a decision (YES or NO), and we record it. Base made sense because gas is cheap, the chain is fast, and the OpenClaw quest was explicitly about building on Base. I plugged in Limitless Exchange for market data and, eventually, for real order placement — but I started in mock mode so I could test the full pipeline without risking funds.
+CrabTrader is a program that runs 24/7. It has no website—you see it through:
 
----
+- **Farcaster** — where it posts what it's thinking, what it traded, and summaries (like a social feed)
+- **Base blockchain** — where it places real USDC trades and mints NFTs
+- **Logs** — text output that shows what the agent did each time it ran
 
-## The Stack
-
-- **Runtime:** Node.js 20+, TypeScript
-- **Blockchain:** Viem, Base mainnet
-- **AI:** Anthropic Claude API (structured JSON output for BUY/SELL/HOLD decisions)
-- **Markets:** Limitless Exchange API (market data; orders when real trading is enabled)
-- **Social:** Neynar API for Farcaster (casts, replies)
-- **Database:** Supabase (PostgreSQL) — trades, portfolio snapshots, social post history
-- **Smart contract:** A simple ERC-721 (CrabTradeNFT) that mints a “trade receipt” when a closed trade is notable (e.g. >20% P&L)
-
-No frontend. No React. Just one long-running process and a lot of environment variables.
+Think of it as a robot that: looks at prediction markets → asks an AI what to do → places real trades → posts the results. The personality is a crab: calm, some puns, honest about losses. It never gives financial advice.
 
 ---
 
-## What the Bot Does Every 3 Minutes
+## What Are Prediction Markets? (Quick Explainer)
 
-The agent runs in an infinite loop. Each iteration does the following, in order:
-
-1. **Health check** — Verifies the wallet has at least a minimum ETH balance (for gas). If not, it logs a warning and can post an alert.
-
-2. **Fetch markets** — Calls the Limitless API to get active prediction markets: name, slug, YES/NO prices, volume. These are the only instruments the AI can choose from.
-
-3. **Portfolio state** — Reads the database for open trades and the wallet balance. For each open position it fetches the current market price and computes unrealized P&L.
-
-4. **News (optional)** — Pulls headlines from RSS feeds (e.g. crypto news) and passes them to the AI as extra context.
-
-5. **AI analysis** — Sends Claude a prompt with: portfolio value, open positions with P&L, list of markets with prices, and news. The prompt includes strict risk rules (max position size, stop loss, take profit, max open positions). Claude returns a JSON object: an array of decisions (action, marketId, marketName, position YES/NO, amountEth, reasoning, confidence) plus market commentary and risk assessment.
-
-6. **Execute decisions** — For each BUY: resolve the market slug, compute position size in USD, and either place a mock trade (record in DB only) or a real order via Limitless (with USDC approve + EIP-712 signed order). Record the trade in Supabase and post a trade-entry cast to Farcaster. For each SELL: find the open trade, get current price, close the position (mock or real), update the trade with exit price and P&L, post an exit cast.
-
-7. **Notable trades → NFTs** — Scan closed trades that don’t yet have an NFT. If |P&L| ≥ threshold (e.g. 20%), call the CrabTradeNFT contract’s `mintTrade` (and `isNotableTrade`). Store the token ID on the trade and post an NFT mint cast.
-
-8. **Mentions** — Optionally fetch Farcaster (and Twitter) mentions and use the AI to generate replies, then post them.
-
-9. **Daily summary** — Once per 24 hours, post a portfolio summary (balance, open positions, daily P&L).
-
-10. **Round summary** — Every iteration, post a short cast: “Scanned X markets, Y decisions, Z trades this round” so the feed shows constant activity.
-
-11. **Tips (optional)** — On a schedule, send a small amount of ETH to a list of addresses (e.g. creators or tools I want to support).
-
-12. **Sleep** — Wait 3 minutes (configurable via `LOOP_INTERVAL_MS`), then repeat from step 1.
-
-So in one sentence: **every 3 minutes the bot fetches markets, asks Claude what to do, executes (or mocks) trades, mints NFTs for big moves, and posts the results to Farcaster.**
+Prediction markets let you bet on yes/no questions like "Will BTC be above $100k by 2026?" You buy YES or NO. If you're right, you win. The AI reads the markets, decides YES or NO (or HOLD), and we place real orders for it.
 
 ---
 
-## Why Mock Mode First?
+## Why PredictBase? (Base + USDC, No Polygon)
 
-I wanted the full pipeline to work before risking real funds. So the agent runs with `LIMITLESS_TRADING_ENABLED=false`. In that mode, “trades” are recorded in the database and posted to Farcaster, but no real USDC orders are sent to Limitless. That let me:
-
-- Verify the AI returns valid decisions and that we parse them correctly
-- Ensure market slugs resolve and that we’d pass the right parameters for real orders later
-- Test Farcaster posting, NFT minting, and the round summary without moving real money
-
-Once I’m satisfied and have the exchange API fully set up (e.g. profile ID for orders), I’ll flip the switch to real trading. The code path is already there; it’s a config change.
+I use **PredictBase** because everything stays on **Base**. Same chain as my wallet. Same USDC. No switching to Polygon or other chains. One place for everything. The agent fetches markets from PredictBase, the AI decides BUY/SELL/HOLD, and we place real limit orders. Trades show up on Base and on Farcaster.
 
 ---
 
-## Lessons Learned
+## What I Used (The Tech Stack—Simplified)
 
-- **Start with one loop.** One iteration (fetch → decide → act → post) is easier to debug than a full “product.” Get that right, then add NFTs, mentions, and polish.
-- **Structured AI output is critical.** Using a schema (e.g. Zod) and asking Claude for JSON with exact field names (marketId, marketName, action, amountEth) avoids parsing bugs and wrong trades.
-- **Env vars everywhere.** Wallet key, RPC, API keys for Anthropic, Neynar, Limitless, Supabase — the agent is just config + code. Document them (e.g. in a README and .env.example) so you (and others) can run it.
-- **Deploy early.** Running on Railway (or similar) meant I could close my laptop and still have the bot post every 3 minutes. That made it feel “real” and forced me to fix production issues (Node version, lock file, build with esbuild instead of tsc to avoid dependency type errors).
-- **Community helps.** I had tech friends to ask when I got stuck. If you’re new like me, find a builder community (Base, Farcaster, Twitter) and ship in public.
+| What it does | What I used |
+|--------------|-------------|
+| Runs the code | Node.js + TypeScript |
+| Talks to Base | Viem (a library for blockchain) |
+| Makes decisions | Anthropic Claude API (an AI) |
+| Places trades | PredictBase API (Base + USDC) |
+| Posts to Farcaster | Neynar API |
+| Stores trades | Supabase (a database) |
+| Mints NFTs | A simple smart contract (CrabTradeNFT) |
+
+No website. No React. Just one program and a bunch of settings (called "env vars") that tell it how to connect to everything.
+
+---
+
+## How the Agent Works (Step by Step)
+
+Every few minutes, the same loop runs. Here's what happens:
+
+1. **Health check** — Does my wallet have enough ETH for gas? (Gas = the fee to send transactions)
+2. **Fetch markets** — Get the list of prediction markets from PredictBase (questions, YES/NO prices)
+3. **Portfolio** — What trades do I have open? What's my P&L? (P&L = profit or loss)
+4. **News (optional)** — Pull in some headlines so the AI has extra context
+5. **AI analysis** — Send everything to Claude. Claude returns: BUY this, SELL that, or HOLD
+6. **Execute** — For each BUY: place a real order on PredictBase, save it in the database, post to Farcaster. For each SELL: close the position, update the database, post to Farcaster
+7. **Notable trades → NFTs** — If a closed trade made (or lost) a lot (e.g. 20%+), mint an NFT and post about it
+8. **Summaries** — Post a round summary to Farcaster so people see what the bot did
+9. **Sleep** — Wait a few minutes (you can set this—e.g. 1 min or 3 min), then do it again
+
+**In one sentence:** The agent fetches markets, asks Claude what to do, places real trades, mints NFTs for big moves, and posts everything to Farcaster.
+
+---
+
+## Setup Guide: What You Need Before You Start
+
+- A **Base wallet** (MetaMask, Coinbase Wallet, etc.)
+- An **Anthropic API key** (for Claude—get it at console.anthropic.com)
+- A **Supabase project** (free tier is fine—it's a database)
+- A **Farcaster account** (e.g. Warpcast) + **Neynar signer** (so the bot can post)
+- A **PredictBase API key** (for real trading—get it from PredictBase docs)
+
+Don't worry if some of this sounds new. I'll walk through each part.
+
+---
+
+## Step 1: Get the Code and Install
+
+Open a terminal (or use your code editor's terminal) and run:
+
+```bash
+git clone https://github.com/your-username/crab-trader-agent.git
+cd crab-trader-agent
+npm install
+```
+
+`npm install` downloads all the libraries the project needs. This might take a minute.
+
+---
+
+## Step 2: Set Up Your Environment Variables (.env)
+
+Think of env vars as secret settings—API keys, wallet key, etc. The bot needs these to work.
+
+1. Copy `.env.example` to a new file called `.env`
+2. Open `.env` in your editor and fill in the values:
+
+**Required (wallet + AI + database):**
+```
+PRIVATE_KEY=0x...              # Your Base wallet private key (keep this secret!)
+ANTHROPIC_API_KEY=sk-ant-...   # From console.anthropic.com
+SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_KEY=your_anon_key
+```
+
+**Farcaster (so the bot can post):**
+```
+NEYNAR_API_KEY=...
+FARCASTER_SIGNER_UUID=...
+```
+
+**PredictBase (real trading):**
+```
+USE_PREDICTBASE=true
+PREDICTBASE_API_KEY=your_predictbase_api_key
+```
+
+**Optional (you can tweak later):**
+```
+LOOP_INTERVAL_MS=60000         # Run every 1 minute (60000 = 60 seconds)
+MAX_POSITION_SIZE=0.05         # Max 5% of portfolio per trade (start small!)
+```
+
+**Important:** Don't set `USE_POLYMARKET` or `USE_OPINION_LAB` if you want PredictBase only. Only one market source at a time.
+
+---
+
+## Step 3: Get a PredictBase API Key
+
+1. Go to [PredictBase Docs → Get API Key](https://predictbase.gitbook.io/docs/developer/get-api-key)
+2. Follow their steps to request an API key
+3. Copy the key and paste it into `.env` as `PREDICTBASE_API_KEY`
+
+---
+
+## Step 4: Fund Your PredictBase Account
+
+Real trades use real USDC. You need to put USDC into your PredictBase account first.
+
+1. Go to [predictbase.app](https://predictbase.app)
+2. Connect the **same wallet** as the one you put in `PRIVATE_KEY`
+3. Deposit **USDC on Base** into your PredictBase account (they have a deposit flow)
+
+The agent will use this USDC when it places BUY orders.
+
+---
+
+## Step 5: Set Up the Database (Supabase)
+
+The bot stores trades and history in a database. Supabase is free and easy.
+
+1. Go to [supabase.com](https://supabase.com) and create a project
+2. Open the SQL Editor in your project
+3. Open `database/schema.sql` in the CrabTrader repo and copy its contents
+4. Paste into the Supabase SQL Editor and run it
+5. Copy your project URL and "anon" key from Supabase → Settings → API
+6. Put them in `.env` as `SUPABASE_URL` and `SUPABASE_KEY`
+
+---
+
+## Step 6: Deploy the NFT Contract (Optional)
+
+You can skip this if you don't care about NFTs for notable trades. If you want them:
+
+```bash
+npm run deploy:hardhat
+```
+
+After it deploys, copy the contract address and add to `.env`:
+```
+NFT_CONTRACT_ADDRESS=0x...
+```
+
+---
+
+## Step 7: Run the Agent
+
+**On your computer:**
+```bash
+npm run dev
+```
+
+You should see logs like: `Market source: PredictBase`, `Fetched X markets`, `Cast posted: 0x...`
+
+**On Railway (so it runs 24/7):**
+1. Push your code to GitHub
+2. Go to [railway.app](https://railway.app) and connect your repo
+3. Add all the same env vars in Railway → Variables
+4. Set Build: `npm run build`, Start: `npm start`
+5. Deploy
+
+Now the agent runs in the cloud. You can close your laptop.
+
+---
+
+## What You'll See When It Works
+
+- **Logs:** `Market source: PredictBase`, `PredictBase order placed: ...`, `Cast posted: 0x...`
+- **Farcaster:** Round summaries, trade entries/exits, market commentary
+- **Base:** Real USDC trades on PredictBase, NFT mints if you enabled them
+
+---
+
+## Tips I Learned as a Beginner
+
+1. **Start small** — Use `MAX_POSITION_SIZE=0.02` or `0.05` so each trade is tiny. You can increase later.
+2. **Watch the logs** — If something breaks, the logs usually say why. Look for "PredictBase order placed" to confirm real trades.
+3. **Faster loops** — `LOOP_INTERVAL_MS=60000` = 1 minute. Default is 3 minutes.
+4. **Farcaster not posting?** — Make sure `NEYNAR_API_KEY` and `FARCASTER_SIGNER_UUID` are set. The logs will say "Farcaster posting: ENABLED" if it's working.
+5. **"No cached price" warnings** — If you switched from another market (like Polymarket), old positions might show this. They'll clear when the AI closes them or you mark them closed in the database.
+
+---
+
+## What I Learned Along the Way
+
+- **One loop first** — Get the basic loop working (fetch → AI → act → post) before adding NFTs or extras.
+- **Structured AI output** — We use Zod so Claude returns valid JSON. That avoids weird parsing bugs and wrong trades.
+- **Env vars are everything** — The bot is basically config + code. Write down what each env var does so you (and others) can run it.
+- **Deploy early** — Running on Railway made it feel real. I had to fix production issues (Node version, lock file, etc.) and learned a lot.
+- **Ask for help** — I had friends to ask. Base, Farcaster, and Twitter builder communities are full of people who want to help.
 
 ---
 
 ## How You Can Use It
 
-- **Follow the bot:** The Farcaster account linked to my agent posts every round. You’ll see what it’s “thinking,” what it traded, and when it mints NFTs. No signup beyond Farcaster.
-- **Run your own:** The project is open source. Clone the repo, add your own keys (Anthropic, Neynar, Supabase, Limitless if you want real trading), deploy the NFT contract, and run it locally or on Railway. You’ll have your own CrabTrader with your wallet and your Farcaster.
-- **Remix it:** Change the prompt, the risk rules, the markets, or the social platform. The core loop (fetch → AI → act → post) is the same; the rest is configuration and copy.
+- **Follow my bot** — The Farcaster account posts every round. You'll see what it trades and when.
+- **Run your own** — Clone the repo, add your keys, fund PredictBase, deploy. You'll have your own CrabTrader.
+- **Change it** — Tweak the prompt, risk rules, or markets. The core loop stays the same.
 
 ---
 
-## What’s Next?
+## Quick Checklist (Before You Publish)
 
-- Enable real Limitless trading once the API/profile setup is solid.
-- Optionally add a minimal “status” page (e.g. last iteration time, last trade) so there’s a URL to share.
-- Keep iterating on the AI prompt and risk parameters based on how the bot behaves in production.
+- [ ] Clone repo, run `npm install`
+- [ ] Add env vars (wallet, Anthropic, Supabase, Neynar, PredictBase)
+- [ ] Get PredictBase API key
+- [ ] Fund PredictBase with USDC on Base
+- [ ] Run Supabase schema
+- [ ] (Optional) Deploy NFT contract
+- [ ] Run `npm run dev` or deploy to Railway
 
 ---
-
-If you’re new to building agents or to Base, I hope this gives you a clear picture of what “an AI that trades and posts” actually looks like under the hood. You don’t need to be an expert — you need curiosity, a wallet, some API keys, and the willingness to run one loop until it works.
 
 **CrabTrader:** [your Farcaster link]  
 **Repo:** [your GitHub link]  
@@ -120,4 +257,4 @@ If you’re new to building agents or to Base, I hope this gives you a clear pic
 
 ---
 
-*Disclaimer: This agent is for learning and experimentation. It can lose funds. I run it in mock mode while testing. Never risk more than you can afford to lose, and the bot does not provide financial advice.*
+*Disclaimer: I'm a beginner. This agent is for learning and experimentation. It uses real USDC and can lose funds. Never risk more than you can afford to lose. The bot does not provide financial advice.*

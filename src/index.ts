@@ -596,7 +596,9 @@ async function autonomousLoop(): Promise<void> {
   logger.info('🦀 CrabTrader agent starting...');
   logger.info(`Loop interval: ${config.loopIntervalMs / 1000}s`);
   logger.info(`Market source: ${config.usePredictBase ? 'PredictBase' : config.usePolymarket ? 'Polymarket' : config.useOpinionLab ? 'Opinion Lab' : 'Limitless'}`);
-  if (config.usePolymarket) {
+  if (config.usePredictBase) {
+    logger.info('PredictBase real trading: ON');
+  } else if (config.usePolymarket) {
     logger.info(`Polymarket real trading: ${config.polymarketTradingEnabled ? 'ON' : 'OFF (mock only)'}`);
   } else if (!config.useOpinionLab) {
     logger.info(`Limitless real trading: ${config.limitlessTradingEnabled ? 'ON' : 'OFF (mock only)'}`);
